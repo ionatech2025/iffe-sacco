@@ -1,12 +1,14 @@
 /**
- * Email service — Resend scaffold.
+ * Email service.
  *
- * When RESEND_API_KEY is set, sends via Resend. Otherwise logs the email
- * contents to the structured logger (dev/test behaviour). Templates are
- * defined here for type-safety and testability; swap to @react-email/components
- * when the design team delivers branded templates.
+ * Transport precedence: SMTP when SMTP_HOST is set, else Resend when
+ * RESEND_API_KEY is set, else log the email contents to the structured logger
+ * (dev/test behaviour). Templates are defined here for type-safety and
+ * testability; swap to @react-email/components when the design team delivers
+ * branded templates.
  */
 // @ts-nocheck
+import nodemailer from "nodemailer";
 import { logger } from "../utils/logger";
 import { env } from "../config/env";
 
@@ -17,7 +19,43 @@ export interface EmailMessage {
   text: string;
 }
 
+async function sendViaSmtp(message: EmailMessage): Promise<void> {
+  const port = Number(process.env.SMTP_PORT || 587);
+  const transport = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port,
+    secure: port === 465, // implicit TLS on 465; STARTTLS (enforced below) otherwise
+    requireTLS: true, // never send credentials or mail over plaintext
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    // Callers await this inside a 30s serverless request; fail fast on an unreachable server.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+  });
+
+  try {
+    // Gmail and most relays rewrite or reject a From that isn't the authenticated account.
+    await transport.sendMail({
+      from: `IFFE Bbenhe <${process.env.SMTP_USER}>`,
+      to: message.to,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    });
+  } catch (err) {
+    logger.error(
+      { event: "email.send_failed", transport: "smtp", error: (err as Error).message },
+      "SMTP server rejected email",
+    );
+    throw err;
+  }
+
+  logger.info({ event: "email.sent", transport: "smtp", to: message.to, subject: message.subject }, "email sent");
+}
+
 export async function sendEmail(message: EmailMessage): Promise<void> {
+  if (process.env.SMTP_HOST) return sendViaSmtp(message);
+
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL || "IFFE Bbenhe <no-reply@sacco.example.org>";
 
