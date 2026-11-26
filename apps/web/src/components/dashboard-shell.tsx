@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { User } from "@iffe/shared";
 import { Sidebar } from "@/components/sidebar";
 import { DashboardHeader } from "@/components/dashboard-header";
@@ -11,13 +11,12 @@ import { BottomNav } from "@/components/bottom-nav";
 import { useAuthStore } from "@/stores/auth-store";
 
 function AuthStateHydrator({ user }: { user: User }) {
-  const hydratedFor = useRef<string | undefined>(undefined);
-  const currentState = useAuthStore.getState();
-
-  if (hydratedFor.current !== user.id || currentState.user?.id !== user.id || currentState.user?.role !== user.role) {
-    useAuthStore.setState({ user, isAuthenticated: true });
-    hydratedFor.current = user.id;
-  }
+  useEffect(() => {
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser?.id !== user.id || currentUser.role !== user.role) {
+      useAuthStore.setState({ user, isAuthenticated: true });
+    }
+  }, [user]);
 
   return null;
 }

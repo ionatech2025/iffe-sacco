@@ -117,8 +117,11 @@ const datePresets = [
 
 export default function ReportsPage() {
   const searchParams = useSearchParams();
-  const today = new Date().toISOString().split("T")[0];
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
+  const currentDate = new Date();
+  const thirtyDaysAgoDate = new Date(currentDate);
+  thirtyDaysAgoDate.setDate(thirtyDaysAgoDate.getDate() - 30);
+  const today = currentDate.toISOString().split("T")[0];
+  const thirtyDaysAgo = thirtyDaysAgoDate.toISOString().split("T")[0];
   const [reportType, setReportType] = useState(searchParams.get("type") || "statement");
   const [dateFrom, setDateFrom] = useState(thirtyDaysAgo);
   const [dateTo, setDateTo] = useState(today);

@@ -37,9 +37,10 @@ export function useServerTable(options: UseServerTableOptions = {}) {
     sortOrderParam === "asc" || sortOrderParam === "desc" ? sortOrderParam : (options.initialSortOrder ?? "desc");
   const urlSearch = searchParams.get(k("search")) ?? options.initialSearch ?? "";
 
-  // Local state drives the search input for instant feedback; the committed value
-  // is mirrored to the URL (deferred) and back into the input on external changes.
-  const [search, setSearch] = useState(urlSearch);
+  // Keep a local draft for instant feedback. When the URL changes externally,
+  // derive the visible input from the new committed value until the next edit.
+  const [searchInput, setSearchInput] = useState({ value: urlSearch, source: urlSearch });
+  const search = searchInput.source === urlSearch ? searchInput.value : urlSearch;
   const deferredSearch = useDeferredValue(search.trim());
 
   const setParams = useCallback(
@@ -63,11 +64,6 @@ export function useServerTable(options: UseServerTableOptions = {}) {
     // Only react to the debounced term; urlSearch/setParams are read inside.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deferredSearch]);
-
-  // Follow external URL changes (back/forward, shared links) into the input.
-  useEffect(() => {
-    setSearch(urlSearch);
-  }, [urlSearch]);
 
   const params: PaginationParams = {
     page,
@@ -99,9 +95,12 @@ export function useServerTable(options: UseServerTableOptions = {}) {
     [setParams],
   );
 
-  const handleSearchChange = useCallback((value: string) => {
-    setSearch(value);
-  }, []);
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchInput({ value, source: urlSearch });
+    },
+    [urlSearch],
+  );
 
   return {
     params,

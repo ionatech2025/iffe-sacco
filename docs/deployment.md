@@ -16,7 +16,9 @@ The API is bundled as a Next.js API route, enabling single-deployment on Vercel:
 └──────────────────────────────────┘
 ```
 
-A `prebuild.sh` script runs before the build to generate Prisma client and bundle the Hono API into `apps/web/api-bundle/app.mjs`, enabling the API to be served through the Next.js catch-all route at `/api/v1/[...path]`.
+The `apps/web/scripts/prebuild.sh` script runs before `next build` to generate the Prisma client and bundle the Hono API into `apps/web/api-bundle/app.mjs`, enabling the API to be served through the Next.js catch-all route at `/api/v1/[...path]`.
+
+The unified deployment needs Node.js `22.12.0` or newer. SimpleWebAuthn 14 requires Node 22 LTS or newer, and Sentry 11 supports Node 22 starting at `22.12.0`.
 
 ### Split Deployment (Alternative)
 
@@ -45,9 +47,9 @@ NODE_ENV=production
 
 > Note: `NEXT_PUBLIC_API_URL=/api/v1` (relative path) for unified deployment. No CORS needed since API is same-origin.
 
-### 2. prebuild.sh
+### 2. API prebuild
 
-The `prebuild.sh` script prepares the unified build:
+The `scripts/prebuild.sh` script prepares the unified build:
 
 - Runs Prisma client generation from `apps/api`
 - Bundles `apps/api/src/app.ts` into `apps/web/api-bundle/app.mjs` using Bun
@@ -63,7 +65,7 @@ npx vercel --prod
 Or connect the GitHub repo to Vercel:
 
 - **Root Directory**: `apps/web`
-- **Build Command**: `bash prebuild.sh && bun run build`
+- **Build Command**: `bun run build` (runs `scripts/prebuild.sh` before `next build`)
 - **Install Command**: `cd ../.. && bun install`
 - **Output Directory**: `.next`
 
@@ -77,8 +79,9 @@ Running `vercel --prod` from inside `apps/web` can cause path resolution errors 
 
 ### Current Production Project
 
-- **Vercel Project**: `iffe-sacco`
-- **Production Alias**: `https://iffe-sacco.vercel.app`
+- **Vercel Project**: `iffe-sacco` in the **iONA Tech** team
+- **Root Directory**: `apps/web`
+- **Production Alias**: `https://iffe-sacco-mu.vercel.app`
 
 ## Split Deployment (Alternative)
 
