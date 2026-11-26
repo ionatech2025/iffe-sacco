@@ -12,6 +12,8 @@ import nodemailer from "nodemailer";
 import { logger } from "../utils/logger";
 import { env } from "../config/env";
 
+const SMTP_SEND_TIMEOUT_MS = 15_000;
+
 export interface EmailMessage {
   to: string | string[];
   subject: string;
@@ -27,27 +29,39 @@ async function sendViaSmtp(message: EmailMessage): Promise<void> {
     secure: port === 465, // implicit TLS on 465; STARTTLS (enforced below) otherwise
     requireTLS: true, // never send credentials or mail over plaintext
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    // Callers await this inside a 30s serverless request; fail fast on an unreachable server.
+    // Phase limits fail fast on unreachable servers; the total send deadline below
+    // keeps credential delivery within the route's 30s serverless request limit.
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 15_000,
   });
 
+  let sendTimeout: ReturnType<typeof setTimeout> | undefined;
   try {
     // Gmail and most relays rewrite or reject a From that isn't the authenticated account.
-    await transport.sendMail({
-      from: `IFFE Bbenhe <${process.env.SMTP_USER}>`,
-      to: message.to,
-      subject: message.subject,
-      text: message.text,
-      html: message.html,
-    });
+    await Promise.race([
+      transport.sendMail({
+        from: `IFFE Bbenhe <${process.env.SMTP_USER}>`,
+        to: message.to,
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+      }),
+      new Promise<never>((_, reject) => {
+        sendTimeout = setTimeout(() => {
+          transport.close();
+          reject(new Error(`SMTP send exceeded ${SMTP_SEND_TIMEOUT_MS}ms`));
+        }, SMTP_SEND_TIMEOUT_MS);
+      }),
+    ]);
   } catch (err) {
     logger.error(
       { event: "email.send_failed", transport: "smtp", error: (err as Error).message },
       "SMTP server rejected email",
     );
     throw err;
+  } finally {
+    if (sendTimeout) clearTimeout(sendTimeout);
   }
 
   logger.info({ event: "email.sent", transport: "smtp", to: message.to, subject: message.subject }, "email sent");

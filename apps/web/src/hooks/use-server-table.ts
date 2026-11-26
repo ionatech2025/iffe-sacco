@@ -37,10 +37,14 @@ export function useServerTable(options: UseServerTableOptions = {}) {
     sortOrderParam === "asc" || sortOrderParam === "desc" ? sortOrderParam : (options.initialSortOrder ?? "desc");
   const urlSearch = searchParams.get(k("search")) ?? options.initialSearch ?? "";
 
-  // Keep a local draft for instant feedback. When the URL changes externally,
-  // derive the visible input from the new committed value until the next edit.
-  const [searchInput, setSearchInput] = useState({ value: urlSearch, source: urlSearch });
-  const search = searchInput.source === urlSearch ? searchInput.value : urlSearch;
+  // Track URL changes with a revision so a stale draft stays invalidated even
+  // if navigation returns to the draft's original search string.
+  const [urlSearchState, setUrlSearchState] = useState({ value: urlSearch, revision: 0 });
+  if (urlSearchState.value !== urlSearch) {
+    setUrlSearchState({ value: urlSearch, revision: urlSearchState.revision + 1 });
+  }
+  const [searchInput, setSearchInput] = useState({ value: urlSearch, sourceRevision: 0 });
+  const search = searchInput.sourceRevision === urlSearchState.revision ? searchInput.value : urlSearch;
   const deferredSearch = useDeferredValue(search.trim());
 
   const setParams = useCallback(
@@ -97,9 +101,9 @@ export function useServerTable(options: UseServerTableOptions = {}) {
 
   const handleSearchChange = useCallback(
     (value: string) => {
-      setSearchInput({ value, source: urlSearch });
+      setSearchInput({ value, sourceRevision: urlSearchState.revision });
     },
-    [urlSearch],
+    [urlSearchState.revision],
   );
 
   return {
